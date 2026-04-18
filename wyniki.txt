@@ -1,0 +1,286 @@
+Wyniki z terminala
+
+1. Segmentacja sieciowa (Trzy sieci i przypisanie kontenerów)
+
+Komenda do weryfikacji: docker network inspect proxy-net app-net db-net | grep -E 'Name|IPv4Address|EndpointID'
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker network inspect proxy-net app-net db-net | grep -E 'Name|IPv4Address|EndpointID'
+        "Name": "proxy-net",
+                "Name": "backend_2",
+                "EndpointID": "d6fe69a14d1f619c57c60dd4bc84fb3a407a13ab6314bdc15f1ff8817aef3b6a",
+                "IPv4Address": "10.50.0.3/24",
+                "Name": "nginx-proxy",
+                "EndpointID": "29646aac36c8a78c02daa6564ab296c4181dcd207c7eadc202c44a7e3308a72f",
+                "IPv4Address": "10.50.0.4/24",
+                "Name": "backend_1",
+                "EndpointID": "68b888388c7698f369bb23e888a3de46c7f1ef071679423de0b9558d39dcf0a1",
+                "IPv4Address": "10.50.0.2/24",
+        "Name": "app-net",
+                "Name": "redis-cache",
+                "EndpointID": "3f3304c146c4d4a07f87a59fa1c81b37437a35595772cde82c3f0fda2f21cd29",
+                "IPv4Address": "10.51.0.10/24",
+                "Name": "backend_2",
+                "EndpointID": "2cdb97d4c247e8b47de95a178f4d990bdca3f311bcf567afe692df621404460a",
+                "IPv4Address": "10.51.0.3/24",
+                "Name": "backend_1",
+                "EndpointID": "dcec3ba68d53c02f29d9f8b609b2f54b1efe24bf217c26cf98e51e6ef746eb9a",
+                "IPv4Address": "10.51.0.2/24",
+                "Name": "worker",
+                "EndpointID": "92ac87914e41cb53c352573de60152222dd6729455970bf76ff8c09dd9b8e0ad",
+                "IPv4Address": "10.51.0.4/24",
+        "Name": "db-net",
+                "Name": "postgres-db",
+                "EndpointID": "51e21db88c2a4aed95ecb6313edd69d167be5307192e08e1e1b7574eed900272",
+                "IPv4Address": "10.52.0.10/24",
+                "Name": "backend_2",
+                "EndpointID": "b3e5538d9560080bd8cb22aa8a9815458580d7ffb8d6950d1711a1bb163fe166",
+                "IPv4Address": "10.52.0.3/24",
+                "Name": "backend_1",
+                "EndpointID": "da67c6911f155e9d41d3e7e921074f30a99bfc478dc19377951291931f9e99f4",
+                "IPv4Address": "10.52.0.2/24",
+                "Name": "worker",
+                "EndpointID": "43f9ecca18e6a0b75a662631fe125d0b8c7389bb5d07b9895430c065ff31aceb",
+                "IPv4Address": "10.52.0.4/24",
+
+2. Izolacja sieciowa (Nginx odcięty od DB, Backend ma dostęp, Worker odizolowany)
+
+Komenda 1 (Brak dostępu Nginx do bazy - oczekiwany błąd): 
+docker exec nginx-proxy ping -c 2 postgres-db
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker exec nginx-proxy ping -c 2 postgres-db
+ping: bad address 'postgres-db'
+
+Komenda 2 (Sukces komunikacji Backend -> Baza): 
+docker exec backend_1 ping -c 2 postgres-db
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker exec backend_1 ping -c 2 postgres-db
+PING postgres-db (10.52.0.10): 56 data bytes
+64 bytes from 10.52.0.10: seq=0 ttl=42 time=0.230 ms
+64 bytes from 10.52.0.10: seq=1 ttl=42 time=0.137 ms
+
+--- postgres-db ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.137/0.183/0.230 ms
+
+Komenda 3 (Sprawdzenie, że Worker nie ma wystawionych portów na hoście):
+docker port worker
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker port worker
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$
+
+Komenda 4 (Sprawdzenie, że Worker jest podłączony tylko do app-net i db-net):
+docker inspect worker --format='{{json .NetworkSettings.Networks}}'
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker inspect worker --format='{{json .NetworkSettings.Networks}}'
+{"app-net":{"IPAMConfig":null,"Links":null,"Aliases":null,"DriverOpts":null,"GwPriority":0,"NetworkID":"46e84f145d7245411fa707ae7cb29baefd7ff6d6db97d549f94da72008dbb1d1","EndpointID":"92ac87914e41cb53c352573de60152222dd6729455970bf76ff8c09dd9b8e0ad","Gateway":"10.51.0.1","IPAddress":"10.51.0.4","MacAddress":"4e:90:cf:67:f8:01","IPPrefixLen":24,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":["worker","fa2b8f7aed75"]},"db-net":{"IPAMConfig":{},"Links":null,"Aliases":[],"DriverOpts":{},"GwPriority":0,"NetworkID":"b8453d33274fb793836345ead3f70889a50572428354af7fd9708184efc97c6e","EndpointID":"43f9ecca18e6a0b75a662631fe125d0b8c7389bb5d07b9895430c065ff31aceb","Gateway":"10.52.0.1","IPAddress":"10.52.0.4","MacAddress":"ce:20:0e:a9:f3:90","IPPrefixLen":24,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":["worker","fa2b8f7aed75"]}}
+
+3. Load Balancing (Rozdzielanie ruchu przez Nginx)
+
+Komenda (wywołana np. 4 razy pod rząd, zwraca naprzemiennie backend_1 i backend_2):
+curl -s http://localhost/api/stats | grep instanceId
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ curl -s http://localhost/api/stats | grep instanceId
+{"totalProducts":3,"instanceId":"backend_1","currentTime":"2026-04-18T21:32:31.761Z","requestCount":20,"uptime":187.51644923}
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ curl -s http://localhost/api/stats | grep instanceId
+{"totalProducts":3,"instanceId":"backend_2","currentTime":"2026-04-18T21:32:32.326Z","requestCount":9,"uptime":187.318965693}
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ curl -s http://localhost/api/stats | grep instanceId
+{"totalProducts":3,"instanceId":"backend_1","currentTime":"2026-04-18T21:32:32.931Z","requestCount":21,"uptime":188.686530144}
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ curl -s http://localhost/api/stats | grep instanceId
+{"totalProducts":3,"instanceId":"backend_2","currentTime":"2026-04-18T21:32:35.086Z","requestCount":10,"uptime":190.079290963}
+
+4. Statyczne IP, brama i adres MAC (Weryfikacja)
+
+Komenda do sprawdzenia bazy danych (PostgreSQL):
+docker inspect postgres-db | grep -E -i "IPAddress|MacAddress|Gateway"
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker inspect postgres-db | grep -E -i "IPAddress|MacAddress|Gateway"
+                    "Gateway": "10.52.0.1",
+                    "IPAddress": "10.52.0.10",
+                    "MacAddress": "02:42:ac:16:00:0a",
+                    "IPv6Gateway": "",
+
+Komenda do sprawdzenia pamięci podręcznej (Redis):
+docker inspect redis-cache | grep -E -i "IPAddress|Gateway"
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker inspect redis-cache | grep -E -i "IPAddress|Gateway"
+                    "Gateway": "10.51.0.1",
+                    "IPAddress": "10.51.0.10",
+                    "IPv6Gateway": "",
+
+5. Default bridge vs Custom bridge - Demonstracja różnicy DNS
+
+Jaka jest różnica w rozwiązywaniu nazw między siecią domyślną a niestandardową?
+-> W domyślnej sieci Dockera (docker0) nie działa wbudowany serwer DNS. Kontenery widzą się wzajemnie tylko po adresach IP, a próba pingu 
+po nazwie kontenera kończy się błędem "bad address". 
+Sieci niestandardowe (custom bridge) uruchamiają własny resolver DNS, dzięki czemu kontenery mogą komunikować się bezpośrednio używając swoich nazw.
+
+DOWÓD - SIEĆ DOMYŚLNA (Brak DNS):
+Komendy:
+docker run -d --name test_def1 alpine sleep infinity
+docker run -d --name test_def2 alpine sleep infinity
+docker exec test_def1 ping -c 2 test_def2
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker run -d --name test_def1 alpine sleep infinity
+d68b3ba8c814de94874cfd0a9a7c65a11d0a748d6cae82eef13c243c35a32294
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker run -d --name test_def2 alpine sleep infinity
+76361e181db42ec44f5f1fb89ebd3f0ecc57984b2d7faf0b639093aceb6c29b6
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker exec test_def1 ping -c 2 test_def2
+ping: bad address 'test_def2'
+
+DOWÓD - SIEĆ NIESTANDARDOWA (Działa DNS):
+Komendy:
+docker run -d --name test_cust1 --network app-net alpine sleep infinity
+docker run -d --name test_cust2 --network app-net alpine sleep infinity
+docker exec test_cust1 ping -c 2 test_cust2
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker run -d --name test_cust1 --network app-net alpine sleep infinity
+a9fc4182b3bb5d538bb42cb1195d3e8ad133fc188e2d17daf36fbbc6a9bf4fdd
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker run -d --name test_cust2 --network app-net alpine sleep infinity
+5684b4aa0df651e40fe497e1b94cb7890cc510fbc27503f0a6022c58855ce6b9
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker exec test_cust1 ping -c 2 test_cust2
+PING test_cust2 (10.51.0.6): 56 data bytes
+64 bytes from 10.51.0.6: seq=0 ttl=64 time=0.253 ms
+64 bytes from 10.51.0.6: seq=1 ttl=64 time=0.096 ms
+
+--- test_cust2 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.096/0.174/0.253 ms
+
+6. Typy sieci: "host" oraz "none"
+
+TRYB SIECI: --network host
+Scenariusz użycia: Tryb ten całkowicie omija wirtualizację sieci Dockera, dając kontenerowi bezpośredni dostęp do interfejsów i portów systemu operacyjnego hosta. 
+Używa się go w aplikacjach wymagających maksymalnej wydajności sieciowej (np. systemy high-frequency trading) lub dla narzędzi monitorujących sieć samego hosta.
+
+Demonstracja komendą: docker run --rm --network host alpine ip addr
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker run --rm --network host alpine ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: services1@services1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP
+    link/ether f2:43:7a:5e:fd:82 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.65.6/32 scope global services1
+       valid_lft forever preferred_lft forever
+    inet6 fdc4:f303:9324::6/128 scope global flags 02
+       valid_lft forever preferred_lft forever
+    inet6 fe80::f043:7aff:fe5e:fd82/64 scope link
+       valid_lft forever preferred_lft forever
+3: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN qlen 1000
+    link/ether ae:67:52:00:5a:a9 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.65.3/24 brd 192.168.65.255 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fdc4:f303:9324::3/64 scope global flags 02
+       valid_lft forever preferred_lft forever
+    inet6 fe80::ac67:52ff:fe00:5aa9/64 scope link
+       valid_lft forever preferred_lft forever
+4: br-b9141bef56ea: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN
+    link/ether f2:5f:38:d5:f3:84 brd ff:ff:ff:ff:ff:ff
+    inet 172.19.0.1/16 brd 172.19.255.255 scope global br-b9141bef56ea
+       valid_lft forever preferred_lft forever
+5: br-c5d83e14e9ce: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN
+    link/ether 0a:36:c1:14:54:63 brd ff:ff:ff:ff:ff:ff
+    inet 172.18.0.1/16 brd 172.18.255.255 scope global br-c5d83e14e9ce
+       valid_lft forever preferred_lft forever
+6: br-3b40ac84256c: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN
+    link/ether 32:7d:09:99:85:1f brd ff:ff:ff:ff:ff:ff
+    inet 172.21.0.1/16 brd 172.21.255.255 scope global br-3b40ac84256c
+       valid_lft forever preferred_lft forever
+7: br-3fbb6c62fdf7: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN
+    link/ether 92:8c:55:9d:20:b1 brd ff:ff:ff:ff:ff:ff
+    inet 172.23.0.1/16 brd 172.23.255.255 scope global br-3fbb6c62fdf7
+       valid_lft forever preferred_lft forever
+8: br-4ec7a9a4d835: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN
+    link/ether 5a:8a:1a:b0:02:68 brd ff:ff:ff:ff:ff:ff
+    inet 172.20.0.1/16 brd 172.20.255.255 scope global br-4ec7a9a4d835
+       valid_lft forever preferred_lft forever
+9: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN
+    link/ether f2:5f:c3:1b:3c:19 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::f05f:c3ff:fe1b:3c19/64 scope link
+       valid_lft forever preferred_lft forever
+10: br-a916873c3798: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN
+    link/ether 8e:f1:4d:41:9c:0c brd ff:ff:ff:ff:ff:ff
+    inet 172.22.0.1/16 brd 172.22.255.255 scope global br-a916873c3798
+       valid_lft forever preferred_lft forever
+299: br-9fcd403d379e: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP
+    link/ether 4a:58:46:2a:ca:28 brd ff:ff:ff:ff:ff:ff
+    inet 10.50.0.1/24 brd 10.50.0.255 scope global br-9fcd403d379e
+       valid_lft forever preferred_lft forever
+    inet6 fe80::4858:46ff:fe2a:ca28/64 scope link
+       valid_lft forever preferred_lft forever
+300: br-46e84f145d72: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP
+    link/ether 36:c5:58:1f:39:af brd ff:ff:ff:ff:ff:ff
+    inet 10.51.0.1/24 brd 10.51.0.255 scope global br-46e84f145d72
+       valid_lft forever preferred_lft forever
+    inet6 fe80::34c5:58ff:fe1f:39af/64 scope link
+       valid_lft forever preferred_lft forever
+301: br-b8453d33274f: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP
+    link/ether 1e:ef:54:f2:c5:95 brd ff:ff:ff:ff:ff:ff
+    inet 10.52.0.1/24 brd 10.52.0.255 scope global br-b8453d33274f
+       valid_lft forever preferred_lft forever
+    inet6 fe80::1cef:54ff:fef2:c595/64 scope link
+       valid_lft forever preferred_lft forever
+302: veth8308bf3@services1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-b8453d33274f state UP
+    link/ether e2:95:d0:4d:42:cd brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::e095:d0ff:fe4d:42cd/64 scope link
+       valid_lft forever preferred_lft forever
+303: veth985129d@services1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-46e84f145d72 state UP
+    link/ether 06:86:4b:b9:1f:6f brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::486:4bff:feb9:1f6f/64 scope link
+       valid_lft forever preferred_lft forever
+304: veth62224f3@services1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-9fcd403d379e state UP
+    link/ether aa:83:57:ee:eb:92 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::a883:57ff:feee:eb92/64 scope link
+       valid_lft forever preferred_lft forever
+305: veth97f0191@eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-46e84f145d72 state UP
+    link/ether c6:28:d2:4e:fc:fc brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::c428:d2ff:fe4e:fcfc/64 scope link
+       valid_lft forever preferred_lft forever
+306: veth4044b81@br-b9141bef56ea: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-b8453d33274f state UP
+    link/ether 2a:16:5c:a6:8f:16 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::2816:5cff:fea6:8f16/64 scope link
+       valid_lft forever preferred_lft forever
+307: veth6fe6c41@services1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-9fcd403d379e state UP
+    link/ether da:50:48:1f:26:d4 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::d850:48ff:fe1f:26d4/64 scope link
+       valid_lft forever preferred_lft forever
+308: veth5397827@eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-46e84f145d72 state UP
+    link/ether 4e:f5:92:aa:dd:22 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::4cf5:92ff:feaa:dd22/64 scope link
+       valid_lft forever preferred_lft forever
+309: veth2f7b6b7@br-b9141bef56ea: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-b8453d33274f state UP
+    link/ether de:eb:71:5e:c2:fc brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::dceb:71ff:fe5e:c2fc/64 scope link
+       valid_lft forever preferred_lft forever
+310: veth27d9fee@services1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-46e84f145d72 state UP
+    link/ether aa:47:b0:75:f4:ec brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::a847:b0ff:fe75:f4ec/64 scope link
+       valid_lft forever preferred_lft forever
+311: veth10a7932@eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-b8453d33274f state UP
+    link/ether 52:a1:30:51:19:70 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::50a1:30ff:fe51:1970/64 scope link
+       valid_lft forever preferred_lft forever
+312: veth9c3dffd@services1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-9fcd403d379e state UP
+    link/ether da:bc:01:e6:3f:0c brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::d8bc:1ff:fee6:3f0c/64 scope link
+       valid_lft forever preferred_lft forever
+
+TRYB SIECI: --network none
+Scenariusz użycia: Tryb ten uruchamia kontener bez żadnego interfejsu sieciowego poza pętlą zwrotną (loopback). 
+Jest on w 100% odcięty od świata. Wykorzystuje się go do wysoce bezpiecznych, odizolowanych zadań, takich jak generowanie kluczy szyfrujących offline, 
+przetwarzanie poufnych danych finansowych bez ryzyka wycieku czy analiza podejrzanego oprogramowania (malware sandboxing).
+
+Demonstracja komendą: docker run --rm --network none alpine ip addr
+
+zosia@LAPTOP-I3H1UI8F:/mnt/c/Users/zosia/..studia/4sem/chmura/lab7$ docker run --rm --network none alpine ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever

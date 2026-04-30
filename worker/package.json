@@ -1,0 +1,13 @@
+{
+  "name": "app-worker",
+  "version": "1.0.0",
+  "description": "Background worker",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "pg": "^8.11.0",
+    "redis": "^4.6.7"
+  }
+}

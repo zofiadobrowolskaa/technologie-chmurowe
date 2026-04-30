@@ -1,38 +1,24 @@
-FROM node:18-alpine AS deps
-WORKDIR /app
-COPY package.json ./
-RUN npm install --omit=dev
+# pierwszy etap budowania aplikacji
+FROM node:18-alpine AS builder
 
-FROM deps AS test
+WORKDIR /app
+
+COPY package*.json ./
 RUN npm install
+
 COPY . .
 
-FROM node:18-alpine AS production
+# drugi etap przygotowania srodowiska produkcyjnego
+FROM node:18-alpine AS runner
+
 WORKDIR /app
 
-ARG BUILD_DATE
-ARG VERSION=v2
-ARG NODE_ENV=production
+# kopiowanie plikow z poprzedniego etapu
+COPY --from=builder /app/package*.json ./
+# Zmiana z npm ci na npm install --omit=dev
+RUN npm install --omit=dev
 
-LABEL org.opencontainers.image.created=$BUILD_DATE \
-      org.opencontainers.image.version=$VERSION \
-      org.opencontainers.image.title="Backend API v2"
+COPY --from=builder /app ./
 
-ENV NODE_ENV=$NODE_ENV
-
-RUN apk add --no-cache wget
-
-RUN addgroup -g 1001 nodejs && adduser -S -u 1001 -G nodejs nodeuser
-
-COPY --from=deps --chown=nodeuser:nodejs /app/node_modules ./node_modules
-COPY --chown=nodeuser:nodejs server.js package.json ./
-
-RUN mkdir -p /app/data /app/tmp && chown -R nodeuser:nodejs /app/data /app/tmp
-
-USER nodeuser
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
-
-CMD ["npm", "start"]
+# uruchomienie serwera
+CMD ["node", "server.js"]

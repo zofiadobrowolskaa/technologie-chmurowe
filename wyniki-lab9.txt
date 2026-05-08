@@ -1,0 +1,674 @@
+ZAAWANSOWANA SUBSTYTUCJA ZMIENNYCH:
+S C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> docker compose config
+error while interpolating services.backend_1.environment.[]: required variable POSTGRES_DB is missing a value: Ustaw POSTGRES_DB w pliku .env
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> docker compose config
+time="2026-05-08T10:08:42+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+time="2026-05-08T10:08:42+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.override.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+name: technologie-chmurowe
+services:
+  backend_1:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend
+      dockerfile: Dockerfile
+    configs:
+      - source: app_config
+        target: /app/app.config.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      BACKEND_PORT: "3000"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: backend_app:latest
+    networks:
+      app-net: null
+      db-net: null
+      proxy-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: bind
+        source: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend\src
+        target: /app/src
+        bind: {}
+  backend_2:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend
+      dockerfile: Dockerfile
+    configs:
+      - source: app_config
+        target: /app/app.config.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      BACKEND_PORT: "3001"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: backend_app:latest
+    networks:
+      app-net: null
+      db-net: null
+      proxy-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: bind
+        source: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend\src
+        target: /app/src
+        bind: {}
+  nginx:
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+    depends_on:
+      backend_1:
+        condition: service_started
+        required: true
+      backend_2:
+        condition: service_started
+        required: true
+    image: nginx:alpine
+    networks:
+      proxy-net: null
+    ports:
+      - mode: ingress
+        target: 80
+        published: "80"
+        protocol: tcp
+  postgres:
+    environment:
+      POSTGRES_DB: app_database
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_USER_FILE: /run/secrets/db_user
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $$(cat /run/secrets/db_user) -d app_database
+      timeout: 5s
+      interval: 10s
+      retries: 5
+    image: postgres:15-alpine
+    networks:
+      db-net: null
+    ports:
+      - mode: ingress
+        target: 5432
+        published: "5432"
+        protocol: tcp
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: volume
+        source: postgres-data
+        target: /var/lib/postgresql/data
+        volume: {}
+  redis:
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 5s
+      interval: 10s
+      retries: 5
+    image: redis:alpine
+    networks:
+      app-net: null
+    volumes:
+      - type: volume
+        source: redis-data
+        target: /data
+        volume: {}
+  worker:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\worker
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      BACKEND_PORT: "3000"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: worker_app:latest
+    networks:
+      app-net: null
+      db-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: bind
+        source: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\worker\src
+        target: /app/src
+        bind: {}
+networks:
+  app-net:
+    name: technologie-chmurowe_app-net
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+          gateway: 172.31.0.1
+  db-net:
+    name: technologie-chmurowe_db-net
+    ipam:
+      config:
+        - subnet: 172.32.0.0/24
+          gateway: 172.32.0.1
+  proxy-net:
+    name: technologie-chmurowe_proxy-net
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1
+volumes:
+  postgres-data:
+    name: technologie-chmurowe_postgres-data
+  redis-data:
+    name: technologie-chmurowe_redis-data
+secrets:
+  db_password:
+    name: technologie-chmurowe_db_password
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\secrets\db_password.txt
+  db_user:
+    name: technologie-chmurowe_db_user
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\secrets\db_user.txt
+configs:
+  app_config:
+    name: technologie-chmurowe_app_config
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend\app.config.json
+  nginx_config:
+    name: technologie-chmurowe_nginx_config
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\nginx.conf
+
+
+TEST ENV:
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> docker compose exec backend_1 printenv LOG_LEVEL
+time="2026-05-08T10:17:48+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+time="2026-05-08T10:17:48+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.override.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+debug
+
+
+
+
+PROFILE USŁUG:
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> docker compose --profile debug up -d
+time="2026-05-08T10:19:31+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+time="2026-05-08T10:19:31+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.override.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] up 8/8
+ ✔ Container technologie-chmurowe-pgadmin-1   Created                                 0.3s
+ ✔ Container technologie-chmurowe-adminer-1   Created                                 0.3s
+ ✔ Container technologie-chmurowe-redis-1     Healthy                                 0.9s
+ ✔ Container technologie-chmurowe-postgres-1  Healthy                                 0.9s
+ ✔ Container technologie-chmurowe-worker-1    Running                                 0.0s
+ ✔ Container technologie-chmurowe-backend_2-1 Running                                 0.0s
+ ✔ Container technologie-chmurowe-backend_1-1 Running                                 0.0s
+ ✔ Container technologie-chmurowe-nginx-1     Running                                 0.0s
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> docker compose --profile migrate up db-migrator
+time="2026-05-08T10:19:55+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+time="2026-05-08T10:19:55+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.override.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] up 2/2
+ ✔ Container technologie-chmurowe-postgres-1    Running                               0.0s
+ ✔ Container technologie-chmurowe-db-migrator-1 Created                               0.2s
+Attaching to db-migrator-1
+Container technologie-chmurowe-postgres-1 Waiting 
+Container technologie-chmurowe-postgres-1 Healthy 
+db-migrator-1  | Running migrations...
+db-migrator-1 exited with code 0
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> docker compose config --profiles
+time="2026-05-08T10:20:10+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+time="2026-05-08T10:20:10+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.override.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+debug
+migrate
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe>                 
+
+
+WZORZEC WIELU PLIKÓW I SEMANTYKA SCALANIA:
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> docker compose config  
+time="2026-05-08T10:21:28+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+time="2026-05-08T10:21:28+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.override.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+name: technologie-chmurowe
+services:
+  backend_1:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend
+      dockerfile: Dockerfile
+    configs:
+      - source: app_config
+        target: /app/app.config.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      BACKEND_PORT: "3000"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: backend_app:latest
+    networks:
+      app-net: null
+      db-net: null
+      proxy-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: bind
+        source: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend\src
+        target: /app/src
+        bind: {}
+  backend_2:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend
+      dockerfile: Dockerfile
+    configs:
+      - source: app_config
+        target: /app/app.config.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      BACKEND_PORT: "3001"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: backend_app:latest
+    networks:
+      app-net: null
+      db-net: null
+      proxy-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: bind
+        source: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend\src
+        target: /app/src
+        bind: {}
+  nginx:
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+    depends_on:
+      backend_1:
+        condition: service_started
+        required: true
+      backend_2:
+        condition: service_started
+        required: true
+    image: nginx:alpine
+    networks:
+      proxy-net: null
+    ports:
+      - mode: ingress
+        target: 80
+        published: "80"
+        protocol: tcp
+  postgres:
+    environment:
+      POSTGRES_DB: app_database
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_USER_FILE: /run/secrets/db_user
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $$(cat /run/secrets/db_user) -d app_database
+      timeout: 5s
+      interval: 10s
+      retries: 5
+    image: postgres:15-alpine
+    networks:
+      db-net: null
+    ports:
+      - mode: ingress
+        target: 5432
+        published: "5432"
+        protocol: tcp
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: volume
+        source: postgres-data
+        target: /var/lib/postgresql/data
+        volume: {}
+  redis:
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 5s
+      interval: 10s
+      retries: 5
+    image: redis:alpine
+    networks:
+      app-net: null
+    volumes:
+      - type: volume
+        source: redis-data
+        target: /data
+        volume: {}
+  worker:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\worker
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      BACKEND_PORT: "3000"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: worker_app:latest
+    networks:
+      app-net: null
+      db-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: bind
+        source: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\worker\src
+        target: /app/src
+        bind: {}
+networks:
+  app-net:
+    name: technologie-chmurowe_app-net
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+          gateway: 172.31.0.1
+  db-net:
+    name: technologie-chmurowe_db-net
+    ipam:
+      config:
+        - subnet: 172.32.0.0/24
+          gateway: 172.32.0.1
+  proxy-net:
+    name: technologie-chmurowe_proxy-net
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1
+volumes:
+  postgres-data:
+    name: technologie-chmurowe_postgres-data
+  redis-data:
+    name: technologie-chmurowe_redis-data
+secrets:
+  db_password:
+    name: technologie-chmurowe_db_password
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\secrets\db_password.txt
+  db_user:
+    name: technologie-chmurowe_db_user
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\secrets\db_user.txt
+configs:
+  app_config:
+    name: technologie-chmurowe_app_config
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend\app.config.json
+  nginx_config:
+    name: technologie-chmurowe_nginx_config
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\nginx.conf
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> docker compose -f docker-compose.yml -f docker-compose.prod.yml config
+time="2026-05-08T10:21:51+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+time="2026-05-08T10:21:51+02:00" level=warning msg="C:\\Users\\zosia\\..studia\\4sem\\chmura\\lab99\\technologie-chmurowe\\docker-compose.prod.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+name: technologie-chmurowe
+services:
+  backend_1:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend
+      dockerfile: Dockerfile
+    configs:
+      - source: app_config
+        target: /app/app.config.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    deploy:
+      resources:
+        limits:
+          cpus: 0.5
+          memory: "536870912"
+    environment:
+      BACKEND_PORT: "3000"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: backend_app:latest
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    networks:
+      app-net: null
+      db-net: null
+      proxy-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+  backend_2:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend
+      dockerfile: Dockerfile
+    configs:
+      - source: app_config
+        target: /app/app.config.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    deploy:
+      resources:
+        limits:
+          cpus: 0.5
+          memory: "536870912"
+    environment:
+      BACKEND_PORT: "3001"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: backend_app:latest
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    networks:
+      app-net: null
+      db-net: null
+      proxy-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+  nginx:
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+    depends_on:
+      backend_1:
+        condition: service_started
+        required: true
+      backend_2:
+        condition: service_started
+        required: true
+    image: nginx:alpine
+    networks:
+      proxy-net: null
+  postgres:
+    environment:
+      POSTGRES_DB: app_database
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_USER_FILE: /run/secrets/db_user
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $$(cat /run/secrets/db_user) -d app_database
+      timeout: 5s
+      interval: 10s
+      retries: 5
+    image: postgres:15-alpine
+    networks:
+      db-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+    volumes:
+      - type: volume
+        source: postgres-data
+        target: /var/lib/postgresql/data
+        volume: {}
+  redis:
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 5s
+      interval: 10s
+      retries: 5
+    image: redis:alpine
+    networks:
+      app-net: null
+    volumes:
+      - type: volume
+        source: redis-data
+        target: /data
+        volume: {}
+  worker:
+    build:
+      context: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\worker
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    deploy:
+      resources:
+        limits:
+          cpus: 0.5
+          memory: "536870912"
+    environment:
+      BACKEND_PORT: "3000"
+      LOG_LEVEL: info
+      POSTGRES_DB: app_database
+      REDIS_URL: redis://redis:6379
+    image: worker_app:latest
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    networks:
+      app-net: null
+      db-net: null
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+networks:
+  app-net:
+    name: technologie-chmurowe_app-net
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+          gateway: 172.31.0.1
+  db-net:
+    name: technologie-chmurowe_db-net
+    ipam:
+      config:
+        - subnet: 172.32.0.0/24
+          gateway: 172.32.0.1
+  proxy-net:
+    name: technologie-chmurowe_proxy-net
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1
+volumes:
+  postgres-data:
+    name: technologie-chmurowe_postgres-data
+  redis-data:
+    name: technologie-chmurowe_redis-data
+secrets:
+  db_password:
+    name: technologie-chmurowe_db_password
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\secrets\db_password.txt
+  db_user:
+    name: technologie-chmurowe_db_user
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\secrets\db_user.txt
+configs:
+  app_config:
+    name: technologie-chmurowe_app_config
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\backend\app.config.json
+  nginx_config:
+    name: technologie-chmurowe_nginx_config
+    file: C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe\nginx.conf
+PS C:\Users\zosia\..studia\4sem\chmura\lab99\technologie-chmurowe> 

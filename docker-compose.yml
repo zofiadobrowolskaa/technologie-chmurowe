@@ -1,6 +1,6 @@
 version: '3.8'
 
-# definicja sieci z reczna konfiguracja adresacji
+# definicje sieci
 networks:
   proxy-net:
     ipam:
@@ -18,19 +18,18 @@ networks:
         - subnet: 172.32.0.0/24
           gateway: 172.32.0.1
 
-# nazwane wolumeny najwyzszego poziomu
+# nazwane wolumeny
 volumes:
   postgres-data:
   redis-data:
 
-# sekrety najwyzszego poziomu zrodla w plikach
+# mapowanie sekretow
 secrets:
   db_user:
     file: ./secrets/db_user.txt
   db_password:
     file: ./secrets/db_password.txt
 
-# pliki konfiguracyjne najwyzszego poziomu
 configs:
   nginx_config:
     file: ./nginx.conf
@@ -40,15 +39,11 @@ configs:
 services:
   nginx:
     image: nginx:alpine
-    ports:
-      - "80:80"
     networks:
       - proxy-net
-    # ladowanie pliku konfiguracyjnego nginx
     configs:
       - source: nginx_config
         target: /etc/nginx/nginx.conf
-    # oczekiwanie na uruchomienie backendow
     depends_on:
       backend_1:
         condition: service_started
@@ -59,15 +54,21 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # podstawienie wersji aplikacji
+    image: backend_app:${APP_VERSION:-latest}
+    env_file:
+      - path: .env.common
+        required: true
+      - path: .env.local
+        required: false
     environment:
-      - BACKEND_PORT=${BACKEND_PORT}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL}
-    # dostarczanie sekretow do kontenera
+      - BACKEND_PORT=${BACKEND_PORT:-3000}
+      - POSTGRES_DB=${POSTGRES_DB:?Ustaw POSTGRES_DB w pliku .env}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     secrets:
       - db_user
       - db_password
-    # wstrzykiwanie pliku konfiguracyjnego
     configs:
       - source: app_config
         target: /app/app.config.json
@@ -85,11 +86,17 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: backend_app:${APP_VERSION:-latest}
+    env_file:
+      - path: .env.common
+        required: true
+      - path: .env.local
+        required: false
     environment:
-      # nadpisanie portu dla drugiej instancji
       - BACKEND_PORT=3001
-      - POSTGRES_DB=${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL}
+      - POSTGRES_DB=${POSTGRES_DB:?Ustaw POSTGRES_DB w pliku .env}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     secrets:
       - db_user
       - db_password
@@ -110,9 +117,16 @@ services:
     build:
       context: ./worker
       dockerfile: Dockerfile
+    image: worker_app:${APP_VERSION:-latest}
+    env_file:
+      - path: .env.common
+        required: true
+      - path: .env.local
+        required: false
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL}
+      - POSTGRES_DB=${POSTGRES_DB:?Ustaw POSTGRES_DB w pliku .env}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     secrets:
       - db_user
       - db_password
@@ -131,7 +145,6 @@ services:
       - redis-data:/data
     networks:
       - app-net
-    # sprawdzanie dostepnosci bazy redis
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -141,8 +154,7 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      # ustawienie wczytywania uwierzytelniania z zamontowanych sekretow
+      - POSTGRES_DB=${POSTGRES_DB:?Ustaw POSTGRES_DB w pliku .env}
       - POSTGRES_USER_FILE=/run/secrets/db_user
       - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
     secrets:
@@ -152,16 +164,40 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - db-net
-    # sprawdzanie gotowosci bazy danych
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$(cat /run/secrets/db_user) -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # serwisy debugowe
   adminer:
     image: adminer:latest
+    profiles: ["debug"]
     ports:
       - "8080:8080"
     networks:
       - db-net
+
+  pgadmin:
+    image: dpage/pgadmin4
+    profiles: ["debug"]
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    networks:
+      - db-net
+
+  # serwis migracji
+  db-migrator:
+    image: alpine
+    profiles: ["migrate"]
+    restart: "no"
+    command: ["echo", "Running migrations..."]
+    networks:
+      - db-net
+    depends_on:
+      postgres:
+        condition: service_healthy
